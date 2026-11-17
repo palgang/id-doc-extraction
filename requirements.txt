@@ -1,0 +1,7 @@
+fastapi==0.163.1
+uvicorn[standard]==0.54.0
+python-multipart==0.0.34
+pydantic==2.14.3
+google-genai==3.4.0
+google-cloud-documentai==3.17.0
+google-cloud-storage==3.17.1

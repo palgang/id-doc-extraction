@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ID Document Extraction</title>
+<style>
+  :root { --bg:#f7f7f5; --fg:#1d1d1b; --muted:#6b6b66; --card:#fff; --line:#e3e3df; --ok:#1f7a3a; --warn:#9a6700; --err:#b42318; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#161615; --fg:#ecece8; --muted:#a0a09a; --card:#20201e; --line:#33332f; --ok:#5cc47e; --warn:#e3b341; --err:#f47067; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  p.lead { color: var(--muted); margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  button { background: var(--fg); color: var(--bg); border: 0; border-radius: 8px; padding: 9px 16px; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .5; cursor: wait; }
+  table { width: 100%; border-collapse: collapse; }
+  td, th { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; font-size: 13px; }
+  .badge { display:inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; border: 1px solid currentColor; }
+  .OK, .info { color: var(--ok); } .REVIEW, .warning { color: var(--warn); } .FAILED, .error { color: var(--err); }
+  pre { overflow-x: auto; font-size: 12px; background: var(--bg); padding: 12px; border-radius: 8px; }
+  code.mrz { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre; display:block; overflow-x:auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>ID document extraction</h1>
+  <p class="lead">Upload the front and back of a German Personalausweis, or the data page of a Reisepass. Use specimen or synthetic documents only.</p>
+  <form class="card" id="form">
+    <input type="file" id="files" name="files" accept="image/*,application/pdf" multiple required>
+    <button type="submit" id="go">Extract</button>
+  </form>
+  <div id="out"></div>
+</main>
+<script>
+const form = document.getElementById('form'), out = document.getElementById('out'), go = document.getElementById('go');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData();
+  for (const f of document.getElementById('files').files) fd.append('files', f);
+  go.disabled = true; out.innerHTML = '<div class="card">Processing…</div>';
+  try {
+    const r = await fetch('v1/extract', { method: 'POST', body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail || r.statusText);
+    const rows = Object.entries(j.fields).map(([k, v]) =>
+      `<tr><td>${esc(k)}</td><td>${esc(v.value)}</td><td>${esc(v.source)}</td><td>${v.verified ? '✓' : ''}</td></tr>`).join('');
+    const issues = j.issues.map(i => `<li class="${i.severity}">${esc(i.code)}: ${esc(i.message)}</li>`).join('') || '<li>None</li>';
+    const mrz = j.mrz ? `<code class="mrz">${esc(j.mrz.lines.join('\n'))}</code><p>Format ${esc(j.mrz.format)}, checksums ${j.mrz.valid ? 'valid' : 'FAILED'}, read by ${esc(j.mrz.read_by)}</p>` : '<p>No MRZ found.</p>';
+    out.innerHTML = `
+      <div class="card"><span class="badge ${j.status}">${j.status}</span>
+        <strong>${esc(j.document.label || j.document.type)}</strong> ${esc(j.document.issuing_country || '')}
+        <span style="color:var(--muted)"> · ${j.processing.duration_ms} ms · ${esc(j.processing.ocr_engine)} + ${esc(j.processing.llm_model || 'no LLM')}</span></div>
+      <div class="card"><table><tr><th>Field</th><th>Value</th><th>Source</th><th>Verified</th></tr>${rows}</table></div>
+      <div class="card"><strong>Issues</strong><ul>${issues}</ul></div>
+      <div class="card"><strong>MRZ</strong>${mrz}</div>
+      <details class="card"><summary>Raw JSON</summary><pre>${esc(JSON.stringify(j, null, 2))}</pre></details>`;
+  } catch (err) { out.innerHTML = `<div class="card error">${esc(err.message)}</div>`; }
+  finally { go.disabled = false; }
+});
+</script>
+</body>
+</html>

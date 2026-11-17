@@ -1,0 +1,5 @@
+project_id      = "my-sandbox-project"
+region          = "europe-west3"
+invoker_members = ["user:you@example.com"]
+# gemini_model  = "gemini-3.5-flash"
+# vertex_location = "global"

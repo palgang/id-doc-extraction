@@ -1,0 +1,12 @@
+# Runs the unit tests, then builds and pushes the image.
+steps:
+  - id: test
+    name: python:3.13-slim
+    entrypoint: bash
+    args: ["-c", "pip install -q -r requirements-dev.txt && python -m pytest -q"]
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args: ["build", "-t", "${_IMAGE}", "."]
+images: ["${_IMAGE}"]
+options:
+  logging: CLOUD_LOGGING_ONLY
