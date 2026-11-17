@@ -13,4 +13,8 @@ terraform {
 provider "google" {
   project = var.project_id
   region  = var.region
+  # Bill API quota to the project, so user credentials (e.g. Cloud Shell) work
+  # with APIs that require a quota project, such as Document AI.
+  user_project_override = true
+  billing_project       = var.project_id
 }

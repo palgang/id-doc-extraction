@@ -28,10 +28,34 @@ pytest
 python scripts/make_specimens.py samples   # synthetic test images
 ```
 
-## Deploy
+## Deploy from Cloud Shell (recommended)
+
+Cloud Shell is already signed in and has `gcloud`, Terraform and git, so no service account
+key is needed. Open [Cloud Shell](https://shell.cloud.google.com/?show=terminal) and run:
+
+```bash
+git clone https://github.com/palgang/id-doc-extraction.git && cd id-doc-extraction
+export PROJECT_ID=your-project-id          # needs billing; you need Owner on it
+gcloud config set project "$PROJECT_ID"
+scripts/deploy.sh                          # ~10 minutes; answers no prompts
+```
+
+Then test the deployed service with the synthetic samples:
+
+```bash
+export SERVICE_URL=$(terraform -chdir=infra/terraform output -raw service_url)
+scripts/smoke_test.sh samples/01_personalausweis_front.png samples/01_personalausweis_back.png
+scripts/smoke_test.sh samples/03_reisepass.png
+```
+
+Terraform state is stored locally in `infra/terraform/` in your Cloud Shell home directory.
+Run later deploys from the same directory, so Terraform updates the existing resources.
+
+## Deploy from elsewhere
 
 Prerequisites: a GCP project with billing, `gcloud` logged in as an Owner (or Editor plus
-Service Usage Admin and Project IAM Admin), Terraform ≥ 1.6.
+Service Usage Admin and Project IAM Admin), Terraform ≥ 1.6
+(`scripts/install_terraform.sh` installs it if the Terraform registry is unreachable).
 
 ```bash
 PROJECT_ID=my-project scripts/deploy.sh
