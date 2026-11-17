@@ -3,7 +3,7 @@
 #
 #   PROJECT_ID=my-project [REGION=europe-west3] [INVOKER=user:me@example.com] scripts/deploy.sh
 #
-# Needs: gcloud (authenticated), terraform >= 1.6.
+# Needs: gcloud (authenticated), terraform >= 1.6 (scripts/install_terraform.sh installs it).
 set -euo pipefail
 
 : "${PROJECT_ID:?set PROJECT_ID}"
