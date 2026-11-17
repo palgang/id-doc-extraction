@@ -48,13 +48,16 @@ scripts/smoke_test.sh samples/01_personalausweis_front.png samples/01_personalau
 scripts/smoke_test.sh samples/03_reisepass.png
 ```
 
-Terraform state is stored locally in `infra/terraform/` in your Cloud Shell home directory.
-Run later deploys from the same directory, so Terraform updates the existing resources.
+Terraform state is stored in the bucket `gs://$PROJECT_ID-tfstate` (created by `deploy.sh`,
+versioned), so later deploys from any machine update the existing resources. Set
+`STATE_BUCKET` to use another bucket. Local state from older checkouts is moved there on the
+next deploy.
 
 ## Deploy from elsewhere
 
 Prerequisites: a GCP project with billing, `gcloud` logged in as an Owner (or Editor plus
-Service Usage Admin and Project IAM Admin), Terraform ≥ 1.6
+Service Usage Admin and Project IAM Admin), either as a user or as a service account
+(`gcloud auth activate-service-account --key-file=key.json`), Terraform ≥ 1.6
 (`scripts/install_terraform.sh` installs it if the Terraform registry is unreachable).
 
 ```bash
@@ -64,7 +67,12 @@ PROJECT_ID=my-project scripts/deploy.sh
 This enables the APIs, creates the Document AI processor, buckets, service accounts and
 registry, runs the tests and builds the image in Cloud Build, then deploys Cloud Run and the
 Eventarc trigger. Optional variables: `REGION` (default `europe-west3`), `INVOKER`
-(default: your gcloud account), `GEMINI_MODEL`, `VERTEX_LOCATION`.
+(default: your gcloud account), `STATE_BUCKET` (default `$PROJECT_ID-tfstate`),
+`GEMINI_MODEL`, `VERTEX_LOCATION`.
+
+Right after the APIs are first enabled, Cloud Build and Eventarc can reject requests for a
+few minutes while IAM propagates. `deploy.sh` retries those steps, so a first deploy can
+pause for a minute or two.
 
 ## Use
 
@@ -75,8 +83,16 @@ export SERVICE_URL=$(terraform -chdir=infra/terraform output -raw service_url)
 scripts/smoke_test.sh samples/01_personalausweis_front.png samples/01_personalausweis_back.png
 ```
 
-**Web UI**: `gcloud run services proxy id-extractor --region europe-west3 --port 8080`, then open
-http://localhost:8080.
+**Web UI**: start a local proxy, then open http://localhost:8080:
+
+```bash
+gcloud run services proxy id-extractor --project "$PROJECT_ID" --region europe-west3 --port 8080
+```
+
+Always pass `--project`: without it, gcloud uses whatever project is set in your local
+config and reports that the service does not exist. Only the accounts in `INVOKER` (and
+project Owners) may call the service; add more with
+`gcloud run services add-iam-policy-binding id-extractor --project "$PROJECT_ID" --region europe-west3 --member user:you@example.com --role roles/run.invoker`.
 
 **Batch**: copy a file (image or 2-page PDF) into the input bucket. The JSON result appears
 as `<name>.json` in the output bucket and the input is deleted.
