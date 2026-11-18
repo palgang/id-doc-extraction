@@ -27,6 +27,12 @@ variable "gemini_model" {
   default     = "gemini-3.5-flash"
 }
 
+variable "gemini_allowed_models" {
+  description = "Gemini model IDs callers may pick per request. Empty = the app's built-in list. gemini_model is always allowed."
+  type        = list(string)
+  default     = []
+}
+
 variable "service_name" {
   type    = string
   default = "id-extractor"

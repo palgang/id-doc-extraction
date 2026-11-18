@@ -68,7 +68,7 @@ This enables the APIs, creates the Document AI processor, buckets, service accou
 registry, runs the tests and builds the image in Cloud Build, then deploys Cloud Run and the
 Eventarc trigger. Optional variables: `REGION` (default `europe-west3`), `INVOKER`
 (default: your gcloud account), `STATE_BUCKET` (default `$PROJECT_ID-tfstate`),
-`GEMINI_MODEL`, `VERTEX_LOCATION`.
+`GEMINI_MODEL`, `GEMINI_ALLOWED_MODELS`, `VERTEX_LOCATION`.
 
 Right after the APIs are first enabled, Cloud Build and Eventarc can reject requests for a
 few minutes while IAM propagates. `deploy.sh` retries those steps, so a first deploy can
@@ -82,6 +82,19 @@ pause for a minute or two.
 export SERVICE_URL=$(terraform -chdir=infra/terraform output -raw service_url)
 scripts/smoke_test.sh samples/01_personalausweis_front.png samples/01_personalausweis_back.png
 ```
+
+**Choosing the Gemini model**: every request uses `GEMINI_MODEL` unless it names another
+one. `GET /v1/models` lists the models that may be chosen; pass one as the form field
+`model`, or set `MODEL` for the smoke test:
+
+```bash
+MODEL=gemini-3.1-pro-preview scripts/smoke_test.sh samples/03_reisepass.png
+curl -H "Authorization: Bearer $(gcloud auth print-identity-token)" "$SERVICE_URL/v1/models"
+```
+
+A model that is not on the list is rejected with HTTP 422. The response reports the model
+used in `processing.llm_model`. The web UI shows the same list as a dropdown and remembers
+your choice in the browser.
 
 **Web UI**: start a local proxy, then open http://localhost:8080:
 
@@ -110,11 +123,18 @@ gsutil cat gs://$PROJECT_ID-id-extractor-out/03_reisepass.png.json
 | `DOCAI_LOCATION` | `eu` | Document AI location |
 | `DOCAI_PROCESSOR_ID` | — | OCR processor id; unset = Gemini reads the image alone |
 | `VERTEX_LOCATION` | `global` | Vertex AI location for Gemini |
-| `GEMINI_MODEL` | `gemini-3.5-flash` | Model id |
+| `GEMINI_MODEL` | `gemini-3.5-flash` | Default model id |
+| `GEMINI_ALLOWED_MODELS` | see below | Comma-separated model ids callers may choose; `GEMINI_MODEL` is always included |
 | `GEMINI_ENABLED` | `true` | `false` = Document AI + MRZ only |
 | `OUTPUT_BUCKET` | — | Bucket for event-driven results |
 | `DELETE_INPUT_AFTER_PROCESSING` | `true` | |
 | `MAX_UPLOAD_BYTES` / `MAX_FILES` | 15 MB / 4 | |
+
+The built-in model list is `gemini-3.5-flash`, `gemini-3.5-flash-lite`, `gemini-3.6-flash`,
+`gemini-3.7-flash`, `gemini-3.8-flash` and `gemini-3.1-pro-preview` (in `app/config.py`).
+Google adds and retires Vertex AI models often; set `GEMINI_ALLOWED_MODELS` to change the
+list without a code change. A model that is listed but not available in your project or
+`VERTEX_LOCATION` returns the result with an `LLM_UNAVAILABLE` issue (MRZ-only data).
 
 ## Privacy
 

@@ -21,6 +21,9 @@
   .badge { display:inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; font-weight: 600; border: 1px solid currentColor; }
   .OK, .info { color: var(--ok); } .REVIEW, .warning { color: var(--warn); } .FAILED, .error { color: var(--err); }
   pre { overflow-x: auto; font-size: 12px; background: var(--bg); padding: 12px; border-radius: 8px; }
+  .row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+  label.model { display:flex; gap:8px; align-items:center; color:var(--muted); font-size:14px; }
+  select { font:inherit; color:var(--fg); background:var(--card); border:1px solid var(--line); border-radius:8px; padding:7px 8px; max-width:100%; }
   code.mrz { font-family: ui-monospace, monospace; font-size: 12px; white-space: pre; display:block; overflow-x:auto; }
 </style>
 </head>
@@ -29,18 +32,32 @@
   <h1>ID document extraction</h1>
   <p class="lead">Upload the front and back of a German Personalausweis, or the data page of a Reisepass. Use specimen or synthetic documents only.</p>
   <form class="card" id="form">
-    <input type="file" id="files" name="files" accept="image/*,application/pdf" multiple required>
-    <button type="submit" id="go">Extract</button>
+    <div class="row">
+      <input type="file" id="files" name="files" accept="image/*,application/pdf" multiple required>
+      <label class="model" id="model-wrap" hidden>Gemini model <select id="model" name="model"></select></label>
+      <button type="submit" id="go">Extract</button>
+    </div>
   </form>
   <div id="out"></div>
 </main>
 <script>
 const form = document.getElementById('form'), out = document.getElementById('out'), go = document.getElementById('go');
+const modelSel = document.getElementById('model');
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+fetch('v1/models').then(r => r.ok ? r.json() : null).then(m => {
+  if (!m || !m.models.length) return;
+  let saved = null;
+  try { saved = localStorage.getItem('gemini-model'); } catch (_) {}
+  modelSel.innerHTML = m.models.map(id => `<option value="${esc(id)}">${esc(id)}${id === m.default ? ' (default)' : ''}</option>`).join('');
+  modelSel.value = m.models.includes(saved) ? saved : m.default;
+  document.getElementById('model-wrap').hidden = false;
+}).catch(() => {});
+modelSel.addEventListener('change', () => { try { localStorage.setItem('gemini-model', modelSel.value); } catch (_) {} });
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
   const fd = new FormData();
   for (const f of document.getElementById('files').files) fd.append('files', f);
+  if (modelSel.value) fd.append('model', modelSel.value);
   go.disabled = true; out.innerHTML = '<div class="card">Processing…</div>';
   try {
     const r = await fetch('v1/extract', { method: 'POST', body: fd });

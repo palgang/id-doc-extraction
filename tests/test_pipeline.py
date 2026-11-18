@@ -27,7 +27,8 @@ class FakeExtractor:
     def __init__(self, result: GeminiExtraction | None = None, error: Exception | None = None) -> None:
         self.result, self.error = result, error
 
-    def extract(self, images, ocr_text):
+    def extract(self, images, ocr_text, model=None):
+        self.called_with_model = model
         if self.error:
             raise self.error
         return self.result
@@ -143,3 +144,27 @@ def test_foreign_document_is_best_effort():
 def test_tampering_indicator_forces_review():
     r = run("\n".join(ID_MRZ), viz(tampering_indicators=["photo edges look pasted"]))
     assert r.status == "REVIEW"
+
+
+def test_selected_model_is_passed_and_reported():
+    extractor = FakeExtractor(viz())
+    r = Pipeline(FakeOcr("\n".join(ID_MRZ)), extractor, today=TODAY).run(IMG, model="gemini-3.8-flash")
+    assert extractor.called_with_model == "gemini-3.8-flash"
+    assert r.processing.llm_model == "gemini-3.8-flash"
+
+
+def test_no_llm_reports_no_model_even_if_one_was_requested():
+    from app.llm import NoExtractor
+    r = Pipeline(FakeOcr("\n".join(ID_MRZ)), NoExtractor(), today=TODAY).run(IMG, model="gemini-3.8-flash")
+    assert r.processing.llm_model is None
+
+
+def test_allowed_models_always_include_default(monkeypatch):
+    from app.config import get_settings
+    monkeypatch.setenv("GEMINI_MODEL", "my-tuned-model")
+    monkeypatch.setenv("GEMINI_ALLOWED_MODELS", "gemini-3.5-flash,,my-tuned-model")
+    get_settings.cache_clear()
+    try:
+        assert get_settings().gemini_allowed_models == ("my-tuned-model", "gemini-3.5-flash")
+    finally:
+        get_settings.cache_clear()

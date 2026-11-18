@@ -1,6 +1,8 @@
 """HTTP entry points (Cloud Run).
 
 * ``POST /v1/extract``   synchronous API: upload 1..n images/PDF of one document, get JSON back.
+                         Optional form field ``model`` picks the Gemini model (see ``GET /v1/models``).
+* ``GET  /v1/models``    Gemini models that may be passed as ``model``, and the default.
 * ``POST /events/gcs``   Eventarc target: a file landed in the input bucket; write JSON to the output bucket.
 * ``GET  /``             minimal upload page for manual testing.
 * ``GET  /healthz``      liveness probe.
@@ -14,7 +16,7 @@ import os
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse
 
 from .config import get_settings
@@ -64,9 +66,25 @@ def index() -> str:
     return (_STATIC / "index.html").read_text(encoding="utf-8")
 
 
-@app.post("/v1/extract", response_model=ExtractionResult)
-async def extract(files: list[UploadFile] = File(..., description="Front/back images or a PDF of ONE document")) -> ExtractionResult:
+@app.get("/v1/models")
+def models() -> dict:
     settings = get_settings()
+    enabled = settings.gemini_enabled and bool(settings.project_id)
+    return {
+        "default": settings.gemini_model if enabled else None,
+        "models": list(settings.gemini_allowed_models) if enabled else [],
+    }
+
+
+@app.post("/v1/extract", response_model=ExtractionResult)
+async def extract(
+    files: list[UploadFile] = File(..., description="Front/back images or a PDF of ONE document"),
+    model: str | None = Form(None, description="Gemini model id; one of GET /v1/models. Default: GEMINI_MODEL"),
+) -> ExtractionResult:
+    settings = get_settings()
+    model = (model or "").strip() or None
+    if model is not None and model not in settings.gemini_allowed_models:
+        raise HTTPException(422, f"Unknown model {model!r}. Allowed: {', '.join(settings.gemini_allowed_models)}.")
     if not files or len(files) > settings.max_files:
         raise HTTPException(400, f"Upload between 1 and {settings.max_files} files of the same document.")
     images: list[Image] = []
@@ -78,7 +96,7 @@ async def extract(files: list[UploadFile] = File(..., description="Front/back im
         if mime is None:
             raise HTTPException(415, f"{f.filename}: unsupported file type (use JPEG, PNG, TIFF, WEBP or PDF).")
         images.append(Image(content=content, mime_type=mime))
-    return get_pipeline().run(images)
+    return get_pipeline().run(images, model=model)
 
 
 @app.post("/events/gcs")

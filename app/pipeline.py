@@ -38,7 +38,8 @@ class Pipeline:
     def today(self) -> date:
         return self._today or date.today()
 
-    def run(self, images: list[Image], request_id: str | None = None) -> ExtractionResult:
+    def run(self, images: list[Image], request_id: str | None = None, model: str | None = None) -> ExtractionResult:
+        """Extract one document. ``model`` picks the Gemini model (already validated by the caller)."""
         started = time.monotonic()
         request_id = request_id or uuid.uuid4().hex
         issues: list[Issue] = []
@@ -55,7 +56,7 @@ class Pipeline:
         # 3. Gemini reads the visual zone (and transcribes the MRZ as a second opinion).
         viz: GeminiExtraction | None = None
         try:
-            viz = self.extractor.extract(images, ocr_text)
+            viz = self.extractor.extract(images, ocr_text, model=model)
         except Exception as exc:  # noqa: BLE001 - degrade to MRZ-only, never fail the request
             log.exception("gemini extraction failed request_id=%s", request_id)
             issues.append(Issue(code="LLM_UNAVAILABLE", message=f"Visual-zone extraction failed: {type(exc).__name__}", severity="error"))
@@ -71,7 +72,7 @@ class Pipeline:
             result.mrz["read_by"] = mrz_source
         result.processing = ProcessingInfo(
             ocr_engine=self.ocr.name,
-            llm_model=self.extractor.model,
+            llm_model=(model or self.extractor.model) if self.extractor.model else None,
             pages=pages,
             duration_ms=int((time.monotonic() - started) * 1000),
         )

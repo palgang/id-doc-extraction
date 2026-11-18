@@ -24,6 +24,10 @@ fi
 
 TF_VARS=(-var "project_id=$PROJECT_ID" -var "region=$REGION" -var "invoker_members=[\"$INVOKER\"]")
 [[ -n "${GEMINI_MODEL:-}" ]] && TF_VARS+=(-var "gemini_model=$GEMINI_MODEL")
+# Comma-separated, e.g. GEMINI_ALLOWED_MODELS=gemini-3.5-flash,gemini-3.1-pro-preview
+if [[ -n "${GEMINI_ALLOWED_MODELS:-}" ]]; then
+  TF_VARS+=(-var "gemini_allowed_models=[$(sed 's/[^,][^,]*/"&"/g' <<<"${GEMINI_ALLOWED_MODELS// /}")]")
+fi
 [[ -n "${VERTEX_LOCATION:-}" ]] && TF_VARS+=(-var "vertex_location=$VERTEX_LOCATION")
 
 # Right after APIs are enabled, Cloud Build and Eventarc can reject calls for a few minutes

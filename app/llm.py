@@ -47,7 +47,9 @@ class Image:
 class Extractor(Protocol):
     model: str | None
 
-    def extract(self, images: list[Image], ocr_text: str) -> GeminiExtraction | None: ...
+    def extract(self, images: list[Image], ocr_text: str, model: str | None = None) -> GeminiExtraction | None:
+        """Read the document. ``model`` overrides the default model for this call."""
+        ...
 
 
 class GeminiExtractor:
@@ -57,14 +59,14 @@ class GeminiExtractor:
         self.model = settings.gemini_model
         self._client = genai.Client(vertexai=True, project=settings.project_id, location=settings.vertex_location)
 
-    def extract(self, images: list[Image], ocr_text: str) -> GeminiExtraction | None:
+    def extract(self, images: list[Image], ocr_text: str, model: str | None = None) -> GeminiExtraction | None:
         from google.genai import types
 
         hint = OCR_HINT.format(text=ocr_text[:8000]) if ocr_text.strip() else ""
         parts: list = [types.Part.from_bytes(data=img.content, mime_type=img.mime_type) for img in images]
         parts.append(PROMPT.format(ocr_hint=hint))
         response = self._client.models.generate_content(
-            model=self.model,
+            model=model or self.model,
             contents=parts,
             config=types.GenerateContentConfig(
                 temperature=0,
@@ -80,7 +82,7 @@ class GeminiExtractor:
 class NoExtractor:
     model = None
 
-    def extract(self, images: list[Image], ocr_text: str) -> GeminiExtraction | None:
+    def extract(self, images: list[Image], ocr_text: str, model: str | None = None) -> GeminiExtraction | None:
         return None
 
 
