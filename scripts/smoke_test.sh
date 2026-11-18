@@ -6,5 +6,6 @@ set -euo pipefail
 [[ $# -ge 1 ]] || { echo "usage: $0 FILE [FILE...]"; exit 2; }
 args=()
 for f in "$@"; do args+=(-F "files=@$f"); done
-TOKEN="${ID_TOKEN:-$(gcloud auth print-identity-token)}"
+# Service accounts need an explicit audience; user accounts reject the flag.
+TOKEN="${ID_TOKEN:-$(gcloud auth print-identity-token --audiences="$SERVICE_URL" 2>/dev/null || gcloud auth print-identity-token)}"
 curl -sS --fail-with-body -H "Authorization: Bearer $TOKEN" "${args[@]}" "$SERVICE_URL/v1/extract" | python3 -m json.tool

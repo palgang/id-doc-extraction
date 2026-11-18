@@ -6,8 +6,9 @@ terraform {
       version = ">= 6.0, < 8.0"
     }
   }
-  # For team use, store state in GCS:
-  # backend "gcs" { bucket = "<project>-tfstate"; prefix = "id-extractor" }
+  # State lives in GCS so every deploy (Cloud Shell, CI, a laptop) sees the same resources.
+  # scripts/deploy.sh creates the bucket and passes it with -backend-config.
+  backend "gcs" {}
 }
 
 provider "google" {
