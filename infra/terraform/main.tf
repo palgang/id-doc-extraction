@@ -129,6 +129,10 @@ resource "google_cloud_run_v2_service" "api" {
       image = var.image
       resources {
         limits = { cpu = "1", memory = "1Gi" }
+        # Request-based billing: CPU only while a request is handled, so an idle
+        # instance costs nothing and the service scales to zero (min_instance_count = 0).
+        cpu_idle          = true
+        startup_cpu_boost = true # shorter cold starts
       }
       env {
         name  = "GCP_PROJECT_ID"
