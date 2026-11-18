@@ -88,3 +88,49 @@ def test_gcs_event_writes_result_and_deletes_input(client, monkeypatch):
     result = json.loads(store[("out", "uploads/doc.png.json")])
     assert result["status"] == "OK" and result["source"] == "gs://in/uploads/doc.png"
     assert ("in", "uploads/doc.png") not in store
+
+
+@pytest.fixture
+def model_env(monkeypatch):
+    monkeypatch.setenv("GCP_PROJECT_ID", "test-project")
+    monkeypatch.setenv("GEMINI_MODEL", "gemini-3.5-flash")
+    monkeypatch.setenv("GEMINI_ALLOWED_MODELS", "gemini-3.5-flash-lite, gemini-3.1-pro-preview")
+    main.get_settings.cache_clear()
+    yield
+    main.get_settings.cache_clear()
+
+
+def _pipeline(client):
+    return main.get_pipeline()
+
+
+def test_models_lists_default_first(client, model_env):
+    body = client.get("/v1/models").json()
+    assert body == {"default": "gemini-3.5-flash",
+                    "models": ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.1-pro-preview"]}
+
+
+def test_models_empty_when_gemini_disabled(client, model_env, monkeypatch):
+    monkeypatch.setenv("GEMINI_ENABLED", "false")
+    main.get_settings.cache_clear()
+    assert client.get("/v1/models").json() == {"default": None, "models": []}
+
+
+def test_extract_with_selected_model(client, model_env):
+    r = client.post("/v1/extract", files=[("files", ("a.png", PNG, "image/png"))], data={"model": "gemini-3.1-pro-preview"})
+    assert r.status_code == 200, r.text
+    assert r.json()["processing"]["llm_model"] == "gemini-3.1-pro-preview"
+    assert _pipeline(client).extractor.called_with_model == "gemini-3.1-pro-preview"
+
+
+def test_extract_without_model_uses_default(client, model_env):
+    r = client.post("/v1/extract", files=[("files", ("a.png", PNG, "image/png"))])
+    assert r.status_code == 200, r.text
+    assert r.json()["processing"]["llm_model"] == "fake-gemini"
+    assert _pipeline(client).extractor.called_with_model is None
+
+
+def test_extract_rejects_unknown_model(client, model_env):
+    r = client.post("/v1/extract", files=[("files", ("a.png", PNG, "image/png"))], data={"model": "gpt-4o"})
+    assert r.status_code == 422
+    assert "gemini-3.5-flash" in r.json()["detail"]

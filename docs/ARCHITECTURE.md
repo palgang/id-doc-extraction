@@ -97,7 +97,7 @@ An expired document is reported as a warning, not a failure: the extraction itse
 |---|---|
 | Cloud Run `id-extractor` (europe-west3) | API + event handler. Not public: callers need `roles/run.invoker`. |
 | Document AI `OCR_PROCESSOR` (eu) | OCR. |
-| Vertex AI Gemini (`gemini-3.5-flash`, configurable) | Visual-zone extraction. |
+| Vertex AI Gemini (`gemini-3.5-flash` by default; callers may pick another model from an allowlist per request) | Visual-zone extraction. |
 | GCS `<project>-id-extractor-in` / `-out` | Batch path. Uniform access, public access prevented, objects auto-deleted after 1 day. |
 | Eventarc trigger | `object.finalized` on the input bucket → `/events/gcs`. |
 | Artifact Registry + Cloud Build | Test, build and store the image. |

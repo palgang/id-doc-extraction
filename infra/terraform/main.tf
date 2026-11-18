@@ -155,6 +155,10 @@ resource "google_cloud_run_v2_service" "api" {
         value = var.gemini_model
       }
       env {
+        name  = "GEMINI_ALLOWED_MODELS"
+        value = join(",", var.gemini_allowed_models)
+      }
+      env {
         name  = "OUTPUT_BUCKET"
         value = google_storage_bucket.output.name
       }
